@@ -533,7 +533,7 @@ namespace BuildingSmart.Serialization
 		/// <param name="platform">Specific version, or UNSET to use default (latest)</param>
 		private void BuildFieldList(Type type, IList<KeyValuePair<string, PropertyInfo>> list, bool inherit, bool inverse)
 		{
-			if (inherit && type.BaseType != typeof(object) && type.BaseType != typeof(Serializer))
+			if (inherit && type.BaseType != null && type.BaseType != typeof(object) && type.BaseType != typeof(Serializer))
 			{
 				BuildFieldList(type.BaseType, list, inherit, inverse);
 

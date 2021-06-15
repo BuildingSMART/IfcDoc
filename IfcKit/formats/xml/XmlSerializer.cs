@@ -113,10 +113,6 @@ namespace BuildingSmart.Serialization.Xml
 		{
 			int depth = reader.Depth;
 			string readerLocalName = reader.LocalName;
-			if (readerLocalName == "TemplateRules")
-			{
-				bool b = true;
-			}
 			while (reader.NodeType == XmlNodeType.XmlDeclaration || reader.NodeType == XmlNodeType.Whitespace || reader.NodeType == XmlNodeType.Comment || reader.NodeType == XmlNodeType.None)
 				reader.Read();
 			//System.Diagnostics.Debug.WriteLine(new string(' ', indent) + ">>ReadEntity: " + readerLocalName + " " + (parent == null ? "" : parent.GetType().Name + "." + (propInfo == null ? "null" : propInfo.Name)));
@@ -178,8 +174,13 @@ namespace BuildingSmart.Serialization.Xml
 				t = GetTypeByName(typename);
 				if (!string.IsNullOrEmpty(reader.LocalName) && string.Compare(reader.LocalName, typename) != 0)
 				{
-					Type testType = GetTypeByName(reader.LocalName);
-					if (testType != null && (t == null || testType.IsSubclassOf(t)))
+					string testName = reader.LocalName;
+					if (testName.EndsWith("-wrapper"))
+					{
+						testName = testName.Substring(0, testName.Length - 8);
+					}
+					Type testType = GetTypeByName(testName);
+					if (testType != null && (t == null || (t.IsInterface && t.IsAssignableFrom(testType)) || testType.IsSubclassOf(t)))
 						t = testType;
 				}
 			}
@@ -1891,7 +1892,10 @@ namespace BuildingSmart.Serialization.Xml
 								string str = obj.ToString();
 								if (!string.IsNullOrEmpty(str))
 								{
-									return validId(str);
+									try
+									{
+										return validId(str);
+									} catch(Exception) { }
 								}
 							}
 						}

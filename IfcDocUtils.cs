@@ -19,6 +19,13 @@ namespace IfcDoc
 {
 	public static class IfcDocUtils
 	{
+		public static void SaveProjectFolderRepostiory(string path, DocProject project)
+		{
+			XmlFolderSerializer folderSerializer = new XmlFolderSerializer(typeof(DocProject));
+			folderSerializer.AddFilePrefix(typeof(DocDefinition), "Ifc");
+			folderSerializer.AddFilePrefix(typeof(DocPropertyEnumeration), "PEnum_");
+			folderSerializer.WriteObject(path, project);
+		}
 		public static void SaveProject(DocProject project, string filePath)
 		{
 			project.SortProject();

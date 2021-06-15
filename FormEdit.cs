@@ -10051,28 +10051,8 @@ namespace IfcDoc
 			if (res != System.Windows.Forms.DialogResult.OK)
 				return;
 			Properties.Settings.Default.InputPathGeneral = Path.Combine( folderBrowserDialog.SelectedPath, "figures");
-			XmlFolderSerializer folderSerializer = new XmlFolderSerializer(typeof(DocProject));
-			folderSerializer.AddFilePrefix(typeof(DocDefinition), "Ifc");
-			folderSerializer.AddFilePrefix(typeof(DocPropertyEnumeration), "PEnum_");
-			folderSerializer.WriteObject(folderBrowserDialog.SelectedPath, this.m_project);
 
-			//using (FormSaveFolder form = new FormSaveFolder())
-			//{
-			//	form.SelectedPath = this.folderBrowserDialog.SelectedPath;
-			//	if (form.ShowDialog() == System.Windows.Forms.DialogResult.OK)
-			//	{
-
-			//		Dictionary<string, DocObject> mapEntity = new Dictionary<string, DocObject>();
-			//		Dictionary<string, string> mapSchema = new Dictionary<string, string>();
-			//		BuildMaps(mapEntity, mapSchema);
-
-			//		// sync open folder 
-			//		this.folderBrowserDialog.SelectedPath = form.SelectedPath;
-
-			//		FolderStorage.Save(this.m_project, form.SelectedPath, mapEntity, form.Options);
-			//	}
-			//}
-
+			IfcDocUtils.SaveProjectFolderRepostiory(folderBrowserDialog.SelectedPath, m_project);
 		}
 
 		// replacement function for checking SEntity base class

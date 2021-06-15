@@ -1096,7 +1096,9 @@ namespace IfcDoc
 					result = m_Project.Quantities.Where(x => string.Compare(x.UniqueId, id) == 0).FirstOrDefault();
 					if (result == null)
 					{
-						DocQuantity existing = host.Quantities.Where(x => string.Compare(x.Name, template.Name) == 0).FirstOrDefault();
+						DocQuantity existing = null;
+						if(host != null)
+							existing = host.Quantities.Where(x => string.Compare(x.Name, template.Name) == 0).FirstOrDefault();
 						if (existing == null)
 						{
 							change = "  NEW Quantity " + template.Name;
@@ -1170,9 +1172,13 @@ namespace IfcDoc
 				else
 				{
 					result = m_Project.Properties.Where(x => string.Compare(x.UniqueId, id) == 0).FirstOrDefault();
+					if(result == null)
+						result = m_Project.Properties.Where(x => string.Compare(x.UniqueId, template.GlobalId) == 0).FirstOrDefault();
 					if (result == null)
 					{
-						DocProperty existing = host.Properties.Where(x => string.Compare(x.Name, template.Name) == 0).FirstOrDefault();
+						DocProperty existing = null;
+						if(host != null)
+							existing = host.Properties.Where(x => string.Compare(x.Name, template.Name) == 0).FirstOrDefault();
 						if (existing == null)
 						{
 							change = "  NEW Property " + template.Name;
@@ -1190,6 +1196,10 @@ namespace IfcDoc
 				if (host != null)
 				{
 					DocProperty hosted = host.Properties.Where(x => string.Compare(x.UniqueId, id) == 0).FirstOrDefault();
+					if(hosted == null)
+						hosted = host.Properties.Where(x => string.Compare(x.UniqueId, template.GlobalId) == 0).FirstOrDefault();
+					if (hosted == null)
+						hosted = host.Properties.Where(x => string.Compare(x.Name, template.Name) == 0).FirstOrDefault();
 					if (hosted == null)
 					{
 						change += " ADDED";
@@ -1231,15 +1241,27 @@ namespace IfcDoc
 
 
 					if (!string.IsNullOrEmpty(simplePropertyTemplate.PrimaryMeasureType))
-						property.PrimaryDataType = simplePropertyTemplate.PrimaryMeasureType;
+					{
+						if (string.Compare(simplePropertyTemplate.PrimaryMeasureType, "IfcLabel", true) == 0) //Defaults to IfcLabel
+						{
+							if (!string.IsNullOrEmpty(property.PrimaryDataType) &&
+								string.Compare(simplePropertyTemplate.PrimaryMeasureType, "IfcLabel", true) != 0)
+							{
+								property.PrimaryDataType = null;
+							}
+						}
+						else
+							property.PrimaryDataType = simplePropertyTemplate.PrimaryMeasureType;
+					}
 					if (!string.IsNullOrEmpty(simplePropertyTemplate.SecondaryMeasureType))
 						property.SecondaryDataType = simplePropertyTemplate.SecondaryMeasureType;
 
 					IfcPropertyEnumeration enumeration = simplePropertyTemplate.Enumerators;
 					if (enumeration != null)
 					{
+						property.PropertyType = DocPropertyTemplateTypeEnum.P_ENUMERATEDVALUE;
 						DocPropertyEnumeration propertyEnumeration = null;
-						if (propertyEnumerations.TryGetValue(propertyEnumeration.Name, out propertyEnumeration))
+						if (propertyEnumerations.TryGetValue(enumeration.Name, out propertyEnumeration))
 							property.Enumeration = propertyEnumeration;
 						else
 						{
@@ -1248,10 +1270,12 @@ namespace IfcDoc
 							{
 								changes.Add("    NEW PropertyEnumeration " + enumeration.Name);
 								propertyEnumeration = new DocPropertyEnumeration() { Name = enumeration.Name };
+								property.Enumeration = propertyEnumeration;
 								m_Project.PropertyEnumerations.Add(propertyEnumeration);
 							}
 							else
 								changes.Add("    EXISTING PropertyEnumeration " + enumeration.Name);
+							property.Enumeration = propertyEnumeration;
 							propertyEnumerations[propertyEnumeration.Name] = propertyEnumeration;
 							foreach (IfcValue value in enumeration.EnumerationValues)
 							{
@@ -1333,7 +1357,16 @@ namespace IfcDoc
 				if (propertySetTemplate != null)
 				{
 					changes.Add("\r\n");
+					if (propertySetTemplate.Name == "Pset_CableSegmentTypeCoreSegment")
+						changes.Add("\r\n");
 					DocVariableSet variableSet = null;
+					if(propertySetTemplate.TemplateType == null)
+					{
+						if (propertySetTemplate.Name.ToString().StartsWith("Qto"))
+							propertySetTemplate.TemplateType = IfcPropertySetTemplateTypeEnum.QTO_OCCURRENCEDRIVEN;
+						else
+							propertySetTemplate.TemplateType = IfcPropertySetTemplateTypeEnum.PSET_TYPEDRIVENOVERRIDE;
+					}
 					if (propertySetTemplate.TemplateType.ToString().ToUpper().StartsWith("QTO"))
 					{
 						DocQuantitySet quantitySet = project.FindQuantitySet(propertySetTemplate.Name, out existingSchema);
@@ -1422,7 +1455,8 @@ namespace IfcDoc
 			Dictionary<string, DocPropertyEnumeration> enumerations = new Dictionary<string, DocPropertyEnumeration>();
 			Dictionary<string, DocProperty> simplePropertyDictionary = new Dictionary<string, DocProperty>();
 			Dictionary<string, DocProperty> complexPropertyDictionary = new Dictionary<string, DocProperty>();
-			List<DocQuantity> simpleQuantityList = new List<DocQuantity>();
+			Dictionary<string, DocQuantity> quantityDictionary = new Dictionary<string, DocQuantity>();
+
 			List<DocPropertySet> propertySetList = new List<DocPropertySet>();
 			List<DocQuantitySet> quantitySetList = new List<DocQuantitySet>();
 
@@ -1445,7 +1479,10 @@ namespace IfcDoc
 						{
 							quantitySetList.Add(docQuantitySet);
 							foreach (DocQuantity docQuantity in docQuantitySet.Quantities)
-								simpleQuantityList.Add(docQuantity);
+							{
+								if (!quantityDictionary.ContainsKey(docQuantity.UniqueId))
+									quantityDictionary[docQuantity.UniqueId] = docQuantity;
+							}
 						}
 					}
 				}
@@ -1537,7 +1574,7 @@ namespace IfcDoc
 					ifcPset.HasPropertyTemplates.Add(propertyTemplates[docProp.UniqueId]);	
 			}
 
-			foreach (DocQuantity docQuantity in simpleQuantityList.OrderBy(x => x, comparer))
+			foreach (DocQuantity docQuantity in quantityDictionary.Values.OrderBy(x => x, comparer))
 			{
 				IfcSimplePropertyTemplate ifcProperty = new IfcSimplePropertyTemplate(Program.NewGuid(), null, null, null, null, null, null, null, null, null, null, null);
 				ExportIfcDefinition(ifcProperty, docQuantity);
