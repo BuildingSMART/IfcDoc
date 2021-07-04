@@ -19,6 +19,7 @@ using IfcDoc.Schema.DOC;
 using BuildingSmart.Serialization.Step;
 using IfcDoc.Format.XML;
 using IfcDoc.Schema.SVG;
+using IfcDoc.Documentation;
 
 namespace IfcDoc
 {

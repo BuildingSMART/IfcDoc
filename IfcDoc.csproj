@@ -159,7 +159,6 @@
     <Compile Include="CtlRules.Designer.cs">
       <DependentUpon>CtlRules.cs</DependentUpon>
     </Compile>
-    <Compile Include="DocumentationISO.cs" />
     <Compile Include="DifferenceEngine.cs" />
     <Compile Include="FolderStorage.cs" />
     <Compile Include="FormDatabase.cs">
@@ -560,6 +559,10 @@
     <ProjectReference Include="Formats\IfcDoc.Formats\IfcDoc.Formats.csproj">
       <Project>{967324dc-be05-4db3-83e9-20839b25d814}</Project>
       <Name>IfcDoc.Formats</Name>
+    </ProjectReference>
+    <ProjectReference Include="IfcDoc.Documentation\IfcDoc.Documentation\IfcDoc.Documentation.csproj">
+      <Project>{5ca899d3-3ec9-4aae-bf76-dfee2489d651}</Project>
+      <Name>IfcDoc.Documentation</Name>
     </ProjectReference>
     <ProjectReference Include="IfcDoc.Schemas\IfcDoc.Schemas\IfcDoc.Schemas.csproj">
       <Project>{71c466a9-3c25-4a0f-a7a9-81ddf1c3f838}</Project>

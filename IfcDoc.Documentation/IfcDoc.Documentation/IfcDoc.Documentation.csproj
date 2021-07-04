@@ -1,0 +1,19 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net451</TargetFramework>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\Formats\IfcDoc.Formats\IfcDoc.Formats.csproj" />
+    <ProjectReference Include="..\..\IfcDoc.Schemas\IfcDoc.Schemas\IfcDoc.Schemas.csproj" />
+    <ProjectReference Include="..\..\IfcKit\formats\BuildingSmart.Serialization\BuildingSmart.Serialization.csproj" />
+    <ProjectReference Include="..\..\IfcKit\formats\json\BuildingSmart.Serialization.Json.csproj" />
+    <ProjectReference Include="..\..\IfcKit\formats\spf\BuildingSmart.Serialization.Step.csproj" />
+    <ProjectReference Include="..\..\IfcKit\formats\ttl\BuildingSmart.Serialization.Turtle.csproj" />
+    <ProjectReference Include="..\..\IfcKit\formats\xml\BuildingSmart.Serialization.Xml.csproj" />
+    <ProjectReference Include="..\..\IfcKit\schemas\BuildingSmart.IFC.csproj" />
+    <ProjectReference Include="..\..\IfcKit\utilities\BuildingSmart.Utilities.Conversion\BuildingSmart.Utilities.Conversion.csproj" />
+  </ItemGroup>
+
+</Project>

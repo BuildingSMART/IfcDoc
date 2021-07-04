@@ -13,9 +13,6 @@ using System.IO;
 using System.Text;
 using System.Text.RegularExpressions;
 
-using BuildingSmart.IFC;
-using BuildingSmart.IFC.IfcKernel;
-
 using IfcDoc.Schema;
 using IfcDoc.Schema.DOC;
 using IfcDoc.Schema.PSD;
@@ -37,14 +34,34 @@ using BuildingSmart.Serialization.Step;
 using BuildingSmart.Serialization.Turtle;
 using BuildingSmart.Serialization.Xml;
 using BuildingSmart.Utilities.Conversion;
+using BuildingSmart.IFC;
+using BuildingSmart.IFC.IfcKernel;
 using IfcDoc.Format.SPF;
 using IfcDoc.Format.IFCXML;
 using IfcDoc.Format.ZIP;
+using IfcDoc.Format.SCH;
+using IfcDoc.Format.CNF;
+using IfcDoc.Format.MVDXML;
 
-namespace IfcDoc
+namespace IfcDoc.Documentation
 {
-	public static class DocumentationISO
+	public class DocumentationISO
 	{
+		// taken from CtlExpressG (not sure if it makes sense to put them somewhere or just make global variables)
+		public const int PageX = 600;
+		public const int PageY = 888;
+
+		public string ConverterPath { get; private set; }
+		public bool SkipDiagrams { get; private set; }
+		public string InputPathGeneral { get; private set; }
+
+		public DocumentationISO(string converterPath, bool skipDiagrams, string inputPath)
+		{
+			this.ConverterPath = converterPath;
+			this.SkipDiagrams = skipDiagrams;
+			this.InputPathGeneral = inputPath;
+		}
+
 		/// <summary>
 		/// Exports file.
 		/// </summary>
@@ -122,7 +139,7 @@ namespace IfcDoc
 					using (FileStream stream = new FileStream(filepath, FileMode.Create))
 					{
 						mvdXML mvd = new mvdXML();
-						Program.ExportMvd(mvd, docProject, schemaNamespace, mapEntity, included);
+						FormatMVDXML.ExportMvd(mvd, docProject, schemaNamespace, mapEntity, included);
 						XmlHeader header = new XmlHeader();
 						XmlSerializer format = new XmlSerializer(typeof(mvdXML))
 						{
@@ -169,12 +186,9 @@ namespace IfcDoc
 					break;
 
 				case ".xml": // Express XSD Configuration
-					using (FormatXML format = new FormatXML(filepath, typeof(Schema.CNF.configuration), null, Schema.CNF.SchemaCNF.Prefixes))
+					using (FormatCNF format = new FormatCNF(filepath, typeof(Schema.CNF.configuration), null, Schema.CNF.SchemaCNF.Prefixes))
 					{
-						Schema.CNF.configuration config = new Schema.CNF.configuration();
-						Program.ExportCnf(config, docProject, views, included);
-						format.Instance = config;
-						format.Save();
+						format.Save(docProject, views, included);
 					}
 					break;
 
@@ -190,12 +204,9 @@ namespace IfcDoc
 					break;
 
 				case ".sch":
-					using (FormatXML format = new FormatXML(filepath, typeof(Schema.SCH.schema), "http://purl.oclc.org/dsdl/schematron"))
+					using (FormatSCH format = new FormatSCH(filepath, typeof(Schema.SCH.schema), "http://purl.oclc.org/dsdl/schematron"))
 					{
-						Schema.SCH.schema sch = new Schema.SCH.schema();
-						Program.ExportSch(sch, docProject, included);
-						format.Instance = sch;
-						format.Save();
+						format.Save(docProject, included);
 					}
 					break;
 
@@ -1075,7 +1086,6 @@ namespace IfcDoc
 
 			return sb.ToString();
 		}
-
 
 		private static string FormatTemplate(
 			DocProject docProject,
@@ -2580,7 +2590,7 @@ namespace IfcDoc
 			return content;
 		}
 
-		private static void GenerateExample(
+		private void GenerateExample(
 			DocProject docProject,
 			DocPublication docPublication,
 			DocExample docExample,
@@ -2640,12 +2650,12 @@ namespace IfcDoc
 						try
 						{
 							// generate IFC file, read it
-							if (System.IO.File.Exists(Properties.Settings.Default.ConverterPath))
+							if (System.IO.File.Exists(ConverterPath))
 							{
 								string outputpath = System.IO.Path.GetDirectoryName(docExample.Path) + @"\" + System.IO.Path.GetFileNameWithoutExtension(docExample.Path) + ".ifc";
 
 								// execute
-								System.Diagnostics.Process proc = System.Diagnostics.Process.Start(Properties.Settings.Default.ConverterPath, "-i " + docExample.Path);
+								System.Diagnostics.Process proc = System.Diagnostics.Process.Start(ConverterPath, "-i " + docExample.Path);
 								proc.WaitForExit();
 
 								// now read the file
@@ -2683,7 +2693,7 @@ namespace IfcDoc
 						htmExample.Write("<th>Size</th></tr>");
 
 
-						if (filecontents != null && filecontents.Length > 0 && !Properties.Settings.Default.SkipDiagrams)
+						if (filecontents != null && filecontents.Length > 0 && !SkipDiagrams)
 						{
 							string pathIFC = path + @"\annex\annex-e\" + MakeLinkName(docExample) + ".ifc";
 
@@ -2801,7 +2811,7 @@ namespace IfcDoc
 
 					string documentation = UpdateNumbering(DocumentationHtml(docExample.Documentation), listFigures, listTables, docExample);
 
-					htmExample.WriteDocumentationMarkup(documentation, docExample, docPublication, path, Properties.Settings.Default.InputPathGeneral);
+					htmExample.WriteDocumentationMarkup(documentation, docExample, docPublication, path, InputPathGeneral);
 
 					// generate tables --- if option selected...
 					if (docPublication.GetFormatOption(DocFormatSchemaEnum.SQL) == DocFormatOptionEnum.Examples)
@@ -3719,7 +3729,7 @@ namespace IfcDoc
 		/// <param name="indexpath"></param>
 		/// <param name="listFigures"></param>
 		/// <param name="listTables"></param>
-		private static void GenerateTemplate(
+		private void GenerateTemplate(
 			DocProject docProject,
 			DocTemplateDefinition docTemplate,
 			Dictionary<string, DocObject> mapEntity,
@@ -3759,14 +3769,14 @@ namespace IfcDoc
 				htmTemplate.WriteLine("<" + tag + " class=\"std\">" + indexer + " " + docTemplate.Name + "</" + tag + ">");
 
 				string doc = FormatTemplate(docProject, docPublication, docTemplate, listFigures, listTables, mapEntity, mapSchema, included, path);
-				htmTemplate.WriteDocumentationMarkup(doc, docTemplate, docPublication, path, Properties.Settings.Default.InputPathGeneral);
+				htmTemplate.WriteDocumentationMarkup(doc, docTemplate, docPublication, path, InputPathGeneral);
 
 				// write formatted mvdXML
 				//htmTemplate.WriteLine("<details open=\"open\">");
 				//htmTemplate.WriteLine("<summary>mvdXML</summary>");
 
 				ConceptTemplate mvdTemplate = new ConceptTemplate();
-				Program.ExportMvdTemplate(mvdTemplate, docTemplate, included, false);
+				FormatMVDXML.ExportMvdTemplate(mvdTemplate, docTemplate, included, false);
 				try
 				{
 					System.Xml.Serialization.XmlSerializer ser = new System.Xml.Serialization.XmlSerializer(typeof(ConceptTemplate));
@@ -4108,7 +4118,7 @@ namespace IfcDoc
 										//... mvdXML for entire root
 										ConceptRoot mvdConceptRoot = new ConceptRoot();
 										List<DocTemplateDefinition> listPrivateTemplates = new List<DocTemplateDefinition>();
-										Program.ExportMvdConceptRoot(mvdConceptRoot, docRoot, docProject, null, mapEntity, false, listPrivateTemplates);
+										FormatMVDXML.ExportMvdConceptRoot(mvdConceptRoot, docRoot, docProject, null, mapEntity, false, listPrivateTemplates);
 										XmlSerializer ser = new XmlSerializer(typeof(ConceptRoot));
 										StringBuilder mvdOutput = new StringBuilder();
 										using (System.IO.Stream streamMVD = new System.IO.MemoryStream())
@@ -4135,7 +4145,7 @@ namespace IfcDoc
 											}
 										}
 
-										string html = System.Web.HttpUtility.HtmlEncode(mvdOutput.ToString());
+										string html = System.Net.WebUtility.HtmlEncode(mvdOutput.ToString());
 										html = html.Replace("\r\n", "<br/>\r\n");
 										html = html.Replace("\t", "&nbsp;");
 
@@ -4364,7 +4374,7 @@ namespace IfcDoc
 		/// <param name="included"></param>
 		/// <param name="indexpath"></param>
 		/// <param name="path"></param>
-		public static void GenerateView(
+		public void GenerateView(
 			DocProject docProject, DocPublication docPublication, DocModelView docProjectModelView,
 			Dictionary<string, DocObject> mapEntity, Dictionary<string, string> mapSchema, Dictionary<DocObject, bool> included, int[] indexpath, string path,
 			FormatHTM htmTOC, FormatHTM htmSectionTOC)
@@ -4428,7 +4438,7 @@ namespace IfcDoc
 					}
 
 					string viewtable = FormatView(docProject, docPublication, docProjectModelView, mapEntity, mapSchema, new StringBuilder());
-					htmTemplate.WriteDocumentationMarkup(viewtable, docProjectModelView, docPublication, path, Properties.Settings.Default.InputPathGeneral);
+					htmTemplate.WriteDocumentationMarkup(viewtable, docProjectModelView, docPublication, path, InputPathGeneral);
 
 					// write tables within MVD
 
@@ -4483,7 +4493,7 @@ namespace IfcDoc
 						htmExchange.WriteLine("<p class=\"std\">");
 
 						string exchangedoc = FormatExchange(docProject, docProjectModelView, docExchange, mapEntity, mapSchema, docPublication);
-						htmExchange.WriteDocumentationMarkup(exchangedoc, docExchange, docPublication, path, Properties.Settings.Default.InputPathGeneral);
+						htmExchange.WriteDocumentationMarkup(exchangedoc, docExchange, docPublication, path, InputPathGeneral);
 						htmExchange.WriteLine("</p>");
 					}
 
@@ -4524,33 +4534,31 @@ namespace IfcDoc
 
 		}
 
-		public static List<string> Generate(
+		public List<string> Generate(
 			DocProject docProject,
 			string path,
 			Dictionary<string, DocObject> mapEntity,
 			Dictionary<string, string> mapSchema,
 			DocPublication[] publications,
-			BackgroundWorker worker,
-			FormProgress formProgress)
+			BackgroundWorker worker = null)
 		{
 			string releasepath = path + @"\" + MakeLinkName(docProject.GetSchemaVersion());
 			List<string> indexPaths = new List<string>();
 			foreach (DocPublication docPub in publications)
 			{
 				string relpath = Path.Combine(releasepath, MakeLinkName(string.IsNullOrEmpty(docPub.Code) ? docPub.Name : docPub.Code));
-				indexPaths.Add(GeneratePublication(docProject, relpath, mapEntity, mapSchema, docPub, worker, formProgress));
+				indexPaths.Add(GeneratePublication(docProject, relpath, mapEntity, mapSchema, docPub, worker));
 			}
 			return indexPaths;
 		}
 
-		public static string GeneratePublication(
+		public string GeneratePublication(
 			DocProject docProject,
 			string pathPublication,
 			Dictionary<string, DocObject> mapEntity,
 			Dictionary<string, string> mapSchema,
 			DocPublication docPublication,
-			BackgroundWorker worker,
-			FormProgress formProgress)
+			BackgroundWorker worker = null)
 		{
 			docPublication.ErrorLog.Clear();
 
@@ -4681,13 +4689,13 @@ namespace IfcDoc
 			string pathSchema = path + @"\schema";
 
 			// count progress
-			int progressTotal = docProject.Sections.Count + docProject.Annexes.Count + 2;
-			formProgress.SetProgressTotal(progressTotal);
-			worker.ReportProgress(0, "================================================================================");
-			worker.ReportProgress(0, docPublication);
+			if (worker != null)
+			{
+				worker.ReportProgress(0, "================================================================================");
+				worker.ReportProgress(0, docPublication);
+			}
 
 			int progressCurrent = 0;
-
 
 			// build list of locales in use
 			SortedList<string, string> listLocale = new SortedList<string, string>();
@@ -5098,8 +5106,11 @@ namespace IfcDoc
 
 				foreach (DocPropertyEnumeration entity in docProject.PropertyEnumerations)
 				{
-					if (worker.CancellationPending)
-						return null;
+					if (worker != null)
+					{
+						if (worker.CancellationPending)
+							return null;
+					}
 
 					if (included == null || included.ContainsKey(entity))
 					{
@@ -5141,9 +5152,12 @@ namespace IfcDoc
 				int iSection = 0;
 				foreach (DocSection section in docProject.Sections)
 				{
-					worker.ReportProgress(++progressCurrent, section);
-					if (worker.CancellationPending)
-						return null;
+					if (worker != null)
+					{
+						worker.ReportProgress(++progressCurrent, section);
+						if (worker.CancellationPending)
+							return null;
+					}
 
 					iSection++;
 					using (FormatHTM htmSectionTOC = new FormatHTM(pathSchema + @"\toc-" + iSection.ToString() + ".htm", mapEntity, mapSchema, included))
@@ -5174,7 +5188,7 @@ namespace IfcDoc
 							htmSection.WriteLine("<h1 class=\"num\" id=\"scope\">" + section.Name + "</h1>");
 
 							string documentation = UpdateNumbering(DocumentationHtml(section.Documentation), listFigures, listTables, section);
-							htmSection.WriteDocumentationMarkup(documentation, section, docPublication, path, Properties.Settings.Default.InputPathGeneral);
+							htmSection.WriteDocumentationMarkup(documentation, section, docPublication, path, InputPathGeneral);
 
 
 							if (iSection == 1)
@@ -5481,8 +5495,11 @@ namespace IfcDoc
 						int iSchema = 0;
 						foreach (DocSchema schema in section.Schemas)
 						{
-							if (worker.CancellationPending)
-								return null;
+							if (worker != null)
+							{
+								if (worker.CancellationPending)
+									return null;
+							}
 
 							if (included == null || included.ContainsKey(schema))
 							{
@@ -5515,7 +5532,7 @@ namespace IfcDoc
 										htmSchema.WriteLine("<h3 class=\"std\">" + iSection.ToString() + "." + iSchema.ToString() + "." + iSubSection.ToString() + " Schema Definition</h3>");
 
 										string documentation = UpdateNumbering(DocumentationHtml(schema.Documentation), listFigures, listTables, schema);
-										htmSchema.WriteDocumentationMarkup(documentation, schema, docPublication, path, Properties.Settings.Default.InputPathGeneral);
+										htmSchema.WriteDocumentationMarkup(documentation, schema, docPublication, path, InputPathGeneral);
 
 										// each type
 										if (schema.Types.Count > 0)
@@ -5527,8 +5544,11 @@ namespace IfcDoc
 											int iType = 0;
 											foreach (DocType type in schema.Types)
 											{
-												if (worker.CancellationPending)
-													return null;
+												if (worker != null)
+												{
+													if (worker.CancellationPending)
+														return null;
+												}
 
 												if (type.Name.Equals("IfcNullStyle", StringComparison.OrdinalIgnoreCase) && schema.Name.Equals("IfcConstructionMgmtDomain", StringComparison.OrdinalIgnoreCase))
 												{
@@ -5566,7 +5586,7 @@ namespace IfcDoc
 														documentation = UpdateNumbering(DocumentationHtml(type.Documentation), listFigures, listTables, type);
 
 														htmDef.WriteSummaryHeader("Type definition", true, docPublication);
-														htmDef.WriteDocumentationMarkup(documentation, type, docPublication, path, Properties.Settings.Default.InputPathGeneral);
+														htmDef.WriteDocumentationMarkup(documentation, type, docPublication, path, InputPathGeneral);
 														htmDef.WriteSummaryFooter(docPublication);
 
 														if (type is DocEnumeration)
@@ -5637,7 +5657,7 @@ namespace IfcDoc
 																htmDef.Write("</td><td>");
 																if (docAttr.Documentation != null)
 																{
-																	htmDef.WriteDocumentationMarkup(DocumentationHtmlNoParagraphs(docAttr.Documentation), entity, docPublication, path, Properties.Settings.Default.InputPathGeneral);
+																	htmDef.WriteDocumentationMarkup(DocumentationHtmlNoParagraphs(docAttr.Documentation), entity, docPublication, path, InputPathGeneral);
 																}
 																htmDef.WriteLine("</td></tr>");
 															}
@@ -5716,8 +5736,11 @@ namespace IfcDoc
 											int iEntity = 0;
 											foreach (DocEntity entity in schema.Entities)
 											{
-												if (worker.CancellationPending)
-													return null;
+												if (worker != null)
+												{
+													if (worker.CancellationPending)
+														return null;
+												}
 
 												if (included == null || included.ContainsKey(entity))
 												{
@@ -5749,7 +5772,7 @@ namespace IfcDoc
 														string entitydocumentation = FormatEntityDescription(docProject, entity, listFigures, listTables);
 
 														htmDef.WriteSummaryHeader("Entity definition", true, docPublication);
-														htmDef.WriteDocumentationMarkup(entitydocumentation, entity, docPublication, path, Properties.Settings.Default.InputPathGeneral);
+														htmDef.WriteDocumentationMarkup(entitydocumentation, entity, docPublication, path, InputPathGeneral);
 														htmDef.WriteSummaryFooter(docPublication);
 
 														if (entity.Attributes != null && entity.Attributes.Count > 0)
@@ -5787,7 +5810,7 @@ namespace IfcDoc
 																}
 															}
 
-															htmDef.WriteEntityAttributes(entity, entity, views, dictionaryViews, docPublication, path, ref sequence, Properties.Settings.Default.InputPathGeneral);
+															htmDef.WriteEntityAttributes(entity, entity, views, dictionaryViews, docPublication, path, ref sequence, InputPathGeneral);
 
 															htmDef.WriteLine("</table>");
 
@@ -5820,7 +5843,7 @@ namespace IfcDoc
 																	htmDef.Write("</td><td>");
 																	if (docAttr.Documentation != null)
 																	{
-																		htmDef.WriteDocumentationMarkup(DocumentationHtmlNoParagraphs(docAttr.Documentation), entity, docPublication, path, Properties.Settings.Default.InputPathGeneral);
+																		htmDef.WriteDocumentationMarkup(DocumentationHtmlNoParagraphs(docAttr.Documentation), entity, docPublication, path, InputPathGeneral);
 																	}
 																	htmDef.WriteLine("</td></tr>");
 																}
@@ -5885,7 +5908,7 @@ namespace IfcDoc
 															htmDef.WriteLine("</tr>");
 
 															int sequenceX = 0;
-															htmDef.WriteEntityInheritance(entity, entity, views, dictionaryViews, docPublication, path, ref sequenceX, Properties.Settings.Default.InputPathGeneral);
+															htmDef.WriteEntityInheritance(entity, entity, views, dictionaryViews, docPublication, path, ref sequenceX, InputPathGeneral);
 
 															htmDef.WriteLine("</table>");
 
@@ -5895,7 +5918,7 @@ namespace IfcDoc
 
 														string conceptdocumentation = FormatEntityConcepts(docProject, entity, mapEntity, mapSchema, included, listFigures, listTables, path, docPublication);
 														//htmDef.WriteLine(conceptdocumentation);
-														htmDef.WriteDocumentationMarkup(conceptdocumentation, entity, docPublication, path, Properties.Settings.Default.InputPathGeneral);
+														htmDef.WriteDocumentationMarkup(conceptdocumentation, entity, docPublication, path, InputPathGeneral);
 
 														if (docProject.Examples != null)
 														{
@@ -6005,7 +6028,7 @@ namespace IfcDoc
 
 														htmDef.WriteSummaryHeader("Function Definition", true, docPublication);
 														htmDef.WriteLine("<p>");
-														htmDef.WriteDocumentationMarkup(DocumentationHtml(entity.Documentation), entity, docPublication, path, Properties.Settings.Default.InputPathGeneral);
+														htmDef.WriteDocumentationMarkup(DocumentationHtml(entity.Documentation), entity, docPublication, path, InputPathGeneral);
 														htmDef.WriteLine("</p>");
 														htmDef.WriteSummaryFooter(docPublication);
 
@@ -6065,7 +6088,7 @@ namespace IfcDoc
 
 														htmDef.WriteSummaryHeader("Global Rule Definition", true, docPublication);
 														htmDef.WriteLine("<p>");
-														htmDef.WriteDocumentationMarkup(DocumentationHtml(entity.Documentation), entity, docPublication, path, Properties.Settings.Default.InputPathGeneral);
+														htmDef.WriteDocumentationMarkup(DocumentationHtml(entity.Documentation), entity, docPublication, path, InputPathGeneral);
 														htmDef.WriteLine("</p>");
 														htmDef.WriteSummaryFooter(docPublication);
 
@@ -6101,8 +6124,11 @@ namespace IfcDoc
 											int iPset = 0;
 											foreach (DocPropertySet entity in schema.PropertySets)
 											{
-												if (worker.CancellationPending)
-													return null;
+												if (worker != null)
+												{
+													if (worker.CancellationPending)
+														return null;
+												}
 
 												if (entity.IsVisible())
 												{
@@ -6205,8 +6231,11 @@ namespace IfcDoc
 											int iPset = 0;
 											foreach (DocQuantitySet entity in schema.QuantitySets)
 											{
-												if (worker.CancellationPending)
-													return null;
+												if (worker != null)
+												{
+													if (worker.CancellationPending)
+														return null;
+												}
 
 												if (included == null || included.ContainsKey(entity))
 												{
@@ -6302,7 +6331,10 @@ namespace IfcDoc
 				char chAnnex = 'A';
 				foreach (DocAnnex docannex in docProject.Annexes)
 				{
-					worker.ReportProgress(++progressCurrent, docannex);
+					if (worker != null)
+					{
+						worker.ReportProgress(++progressCurrent, docannex);
+					}
 
 					iAnnex--;
 					htmTOC.WriteTOC(0, "<a class=\"listing-link\" href=\"annex/annex-" + chAnnex.ToString().ToLower() + ".htm\">Annex " + chAnnex.ToString() + ". " + docannex.Name + "</a>");
@@ -6369,7 +6401,7 @@ namespace IfcDoc
 						else
 						{
 							// no numbering for annex currently... docannex.Documentation = UpdateNumbering(section.Documentation, ref iFigure, ref iTable);
-							htmSection.WriteDocumentationMarkup(DocumentationHtml(docannex.Documentation), docannex, docPublication, path, Properties.Settings.Default.InputPathGeneral);
+							htmSection.WriteDocumentationMarkup(DocumentationHtml(docannex.Documentation), docannex, docPublication, path, InputPathGeneral);
 						}
 
 						if (chAnnex == 'C')
@@ -6741,13 +6773,11 @@ namespace IfcDoc
 														{
 															int pageY = (iDiagram - 1) / docSchema.DiagramPagesHorz;
 															int pageX = (iDiagram - 1) % docSchema.DiagramPagesHorz;
-															int pagePixelCX = CtlExpressG.PageX;
-															int pagePixelCY = CtlExpressG.PageY;
-															using (Image imagePage = new Bitmap(pagePixelCX, pagePixelCY))
+															using (Image imagePage = new Bitmap(PageX, PageY))
 															{
 																using (Graphics g = Graphics.FromImage(imagePage))
 																{
-																	g.DrawImage(imageSchema, new Rectangle(0, 0, pagePixelCX, pagePixelCY), new Rectangle(pagePixelCX * pageX, pagePixelCY * pageY, pagePixelCX, pagePixelCY), GraphicsUnit.Pixel);
+																	g.DrawImage(imageSchema, new Rectangle(0, 0, PageX, PageY), new Rectangle(PageX * pageX, PageY * pageY, PageX, pageY), GraphicsUnit.Pixel);
 																}
 																imagePage.Save(path + "/annex/annex-d/" + MakeLinkName(docSchema) + "/diagram_" + formatnumber + ".png");
 															}
@@ -6954,7 +6984,7 @@ namespace IfcDoc
 								break;
 
 							case 'E':
-								if (docProject.Examples != null && !Properties.Settings.Default.SkipDiagrams)
+								if (docProject.Examples != null && !SkipDiagrams)
 								{
 									List<DocXsdFormat> listFormats = new List<DocXsdFormat>(xsdFormatBase);
 									/*
@@ -6990,7 +7020,7 @@ namespace IfcDoc
 											htmWhatsnew.WriteHeader(docChangeSet.Name, 3, docPublication.Header);
 											htmWhatsnew.WriteScript(iAnnex, iChangeset, 0, 0);
 											htmWhatsnew.WriteLine("<h4 class=\"std\">F." + iChangeset + " " + docChangeSet.Name + "</h4>");
-											htmWhatsnew.WriteDocumentationMarkup(DocumentationHtml(docChangeSet.Documentation), docChangeSet, docPublication, path, Properties.Settings.Default.InputPathGeneral);
+											htmWhatsnew.WriteDocumentationMarkup(DocumentationHtml(docChangeSet.Documentation), docChangeSet, docPublication, path, InputPathGeneral);
 											htmWhatsnew.WriteLinkTo(docPublication, MakeLinkName(docChangeSet), 3);
 											htmWhatsnew.WriteFooter(docPublication.Footer);
 										}
@@ -7208,9 +7238,12 @@ namespace IfcDoc
 				htmTOC.WriteFooter(docPublication.Footer);
 			}
 
-			worker.ReportProgress(++progressCurrent, "Index");
-			if (worker.CancellationPending)
-				return null;
+			if (worker != null)
+			{
+				worker.ReportProgress(++progressCurrent, "Index");
+				if (worker.CancellationPending)
+					return null;
+			}
 
 			// generate index -- takes very long, so only run when changing
 			SortedList<string, DocObject> listIndex = new SortedList<string, DocObject>();
@@ -7299,9 +7332,12 @@ namespace IfcDoc
 					}
 				}
 
-				worker.ReportProgress(++progressCurrent, "Links");
-				if (worker.CancellationPending)
-					return null;
+				if (worker != null)
+				{
+					worker.ReportProgress(++progressCurrent, "Links");
+					if (worker.CancellationPending)
+						return null;
+				}
 
 				// new: incoming links
 				foreach (DocPropertyEnumeration docLinkObj in docProject.PropertyEnumerations)

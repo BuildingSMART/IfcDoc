@@ -36,6 +36,7 @@ using BuildingSmart.Serialization.Json;
 using BuildingSmart.Serialization.Step;
 using BuildingSmart.Serialization.Turtle;
 using BuildingSmart.Serialization.Xml;
+using IfcDoc.Documentation;
 
 #if MDB
     using IfcDoc.Format.MDB;
@@ -4951,7 +4952,13 @@ namespace IfcDoc
 
 				string path = Properties.Settings.Default.OutputPath;
 
-				List<string> indexPaths = DocumentationISO.Generate(this.m_project, path, mapEntity, mapSchema, this.m_publications, this.backgroundWorkerGenerate, this.m_formProgress);
+				// initialize progress bar
+				int progressTotal = this.m_project.Sections.Count + this.m_project.Annexes.Count + 2;
+				this.m_formProgress.SetProgressTotal(progressTotal);
+				
+				// new documentation and generation
+				DocumentationISO documentationISO = new DocumentationISO(Properties.Settings.Default.ConverterPath, Properties.Settings.Default.SkipDiagrams, Properties.Settings.Default.InputPathGeneral);
+				List<string> indexPaths = documentationISO.Generate(this.m_project, path, mapEntity, mapSchema, this.m_publications, this.backgroundWorkerGenerate);
 
 				// launch the content
 
